@@ -54,6 +54,10 @@ You might need to run the following command:
 conda install -c conda-forge google-cloud-sdk
 ```
 
+## Generate CSV coordinates
+
+You can use the following website to generate GPS coordinates in a CSV file: https://www.savecoordinates.com/
+
 ## Credits
 
 This repository was developed as part of the Data+ 2022 project. Special thanks to Saad Lahrichi, who wrote most of the code in this repository. For more details, visit the [Data+ 2022 GitHub repository](https://github.com/zcalhoun/data-plus-22).
