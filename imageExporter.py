@@ -43,7 +43,11 @@ dico = {
         'dataset': ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED"),
         'resolution': 10,
         'RGB': ['B4', 'B3', 'B2'],
+        'RE': ['B7', 'B6', 'B5'], # Red Edge #3 #2 #1
+        'RE4': ['B8A'], # Red Edge #4
         'NIR': ['B8'],
+        'SWIR1': ['B11'],
+        'SWIR2': ['B12'],
         'panchromatic': None,
         'min': 0.0,
         'max': 4500.0
@@ -62,11 +66,15 @@ def boundingBox(lat, lon, size, res):
     return xMin, xMax, yMin, yMax
 
 @retry(tries=10, delay=2, backoff=2)
-def generateURL(coord, height, width, dataset, crs, output_dir, start_date, end_date, sharpened=False):
+def generateURL(coord, height, width, dataset, crs, output_dir, start_date, end_date, band, sharpened=False):
     lon, lat = coord
     description = f"{dataset}_image_{lat}_{lon}"
     # description = f"{dataset}_image_{lat}_{lon}_{start_date}_{end_date}"
-    res = dico[dataset]['resolution']
+    if dataset == 'sentinel' and band not in ['RGB', 'NIR']:
+        res = 20
+    else:
+        res = dico[dataset]['resolution']
+
     xMin, xMax, yMin, yMax = boundingBox(lat, lon, height, res)
     geometry = ee.Geometry.Rectangle([[xMin, yMin], [xMax, yMax]])
     filtered = dico[dataset]['dataset'].filterDate(start_date, end_date).filterBounds(geometry)
@@ -74,7 +82,7 @@ def generateURL(coord, height, width, dataset, crs, output_dir, start_date, end_
         cloud_pct = 10
         filtered = filtered.filter(ee.Filter.lte('CLOUDY_PIXEL_PERCENTAGE', cloud_pct))
     image = filtered.median().clip(geometry)
-    RGB = dico[dataset][args.band]
+    RGB = dico[dataset][band]
     _min = dico[dataset]['min']
     _max = dico[dataset]['max']
     band_names = image.bandNames()
@@ -178,6 +186,7 @@ if __name__ == "__main__":
                            output_dir=args.output_dir,
                            start_date=args.start_date,
                            end_date=args.end_date,
+                           band=args.band,
                            sharpened=args.sharpened)
 
     with open(args.filepath, 'r') as coords_file:

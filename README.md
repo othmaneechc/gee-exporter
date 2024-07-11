@@ -28,7 +28,6 @@ options:
                         path to output directory
   -b BAND, --band BAND
                         band groupe of image (eg. RGB, NIR, etc.)
-                        
   -sh SHARPENED, --sharpened SHARPENED
                         download pan-sharpened image (only available for Landsat)
                         
