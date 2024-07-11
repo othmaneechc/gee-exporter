@@ -25,7 +25,7 @@ dico = {
         'dataset': ee.ImageCollection("LANDSAT/LC08/C02/T1_TOA"),
         'resolution': 30,
         'RGB': ['B4', 'B3', 'B2'],
-        'NIR': 'B5',
+        'NIR': ['B5'],
         'panchromatic': 'B8',
         'min': 0.0,
         'max': 0.4
@@ -34,7 +34,7 @@ dico = {
         'dataset': ee.ImageCollection("USDA/NAIP/DOQQ"),
         'resolution': 0.6,
         'RGB': ['R', 'G', 'B'],
-        'NIR': 'N',
+        'NIR': ['N'],
         'panchromatic': None,
         'min': 0.0,
         'max': 255.0
@@ -43,7 +43,7 @@ dico = {
         'dataset': ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED"),
         'resolution': 10,
         'RGB': ['B4', 'B3', 'B2'],
-        'NIR': 'B8',
+        'NIR': ['B8'],
         'panchromatic': None,
         'min': 0.0,
         'max': 4500.0
@@ -74,7 +74,7 @@ def generateURL(coord, height, width, dataset, crs, output_dir, start_date, end_
         cloud_pct = 10
         filtered = filtered.filter(ee.Filter.lte('CLOUDY_PIXEL_PERCENTAGE', cloud_pct))
     image = filtered.median().clip(geometry)
-    RGB = dico[dataset]['RGB']
+    RGB = dico[dataset][args.band]
     _min = dico[dataset]['min']
     _max = dico[dataset]['max']
     band_names = image.bandNames()
@@ -144,6 +144,7 @@ if __name__ == "__main__":
     parser.add_argument("-he", "--height", help="height of output images (in px)", default=512, type=int)
     parser.add_argument("-w", "--width", help="width of output images (in px)", default=512, type=int)
     parser.add_argument("-o", "--output_dir", help="path to output directory", default="output_images/", type=str)
+    parser.add_argument("-b", "--band", help="which group of bands", default="RGB", type=str)
     parser.add_argument("-sh", "--sharpened", help="download pan-sharpened image (only available for Landsat)", default=False, type=bool)
     parser.add_argument('--parallel', action='store_true')
     parser.add_argument('--no-parallel', dest='parallel', action='store_false')
