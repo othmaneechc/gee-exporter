@@ -48,6 +48,7 @@ dico = {
         'NIR': ['B8'],
         'SWIR1': ['B11'],
         'SWIR2': ['B12'],
+        'IR': ['B8', 'B4', 'B3'], # Colored IR
         'panchromatic': None,
         'min': 0.0,
         'max': 4500.0
@@ -70,7 +71,7 @@ def generateURL(coord, height, width, dataset, crs, output_dir, start_date, end_
     lon, lat = coord
     description = f"{dataset}_image_{lat}_{lon}"
     # description = f"{dataset}_image_{lat}_{lon}_{start_date}_{end_date}"
-    if dataset == 'sentinel' and band not in ['RGB', 'NIR']:
+    if dataset == 'sentinel' and band not in ['RGB', 'NIR', 'IR']:
         res = 20
     else:
         res = dico[dataset]['resolution']
