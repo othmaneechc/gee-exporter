@@ -25,8 +25,11 @@ dico = {
         'dataset': ee.ImageCollection("LANDSAT/LC08/C02/T1_TOA"),
         'resolution': 30,
         'RGB': ['B4', 'B3', 'B2'],
+        'SI1': ['B6'],
+        'SI2': ['B7'],
         'NIR': ['B5'],
-        'panchromatic': 'B8',
+        'Cirrus': ['B9'],
+        'panchromatic': ['B8'],
         'min': 0.0,
         'max': 0.4
     },
@@ -34,6 +37,7 @@ dico = {
         'dataset': ee.ImageCollection("USDA/NAIP/DOQQ"),
         'resolution': 0.6,
         'RGB': ['R', 'G', 'B'],
+        'IR': ['N', 'R', 'G'],
         'NIR': ['N'],
         'panchromatic': None,
         'min': 0.0,
@@ -52,7 +56,15 @@ dico = {
         'panchromatic': None,
         'min': 0.0,
         'max': 4500.0
+    },
+    'gwl_fcs30': {
+        'dataset': ee.ImageCollection("projects/sat-io/open-datasets/GWL_FCS30"),
+        'resolution': 30,
+        'RGB': None, 
+        'min': 0, 
+        'max': 1 
     }
+
 }
 
 def boundingBox(lat, lon, size, res):
@@ -67,29 +79,39 @@ def boundingBox(lat, lon, size, res):
     return xMin, xMax, yMin, yMax
 
 @retry(tries=10, delay=2, backoff=2)
+@retry(tries=10, delay=2, backoff=2)
 def generateURL(coord, height, width, dataset, crs, output_dir, start_date, end_date, band, sharpened=False):
     lon, lat = coord
     description = f"{dataset}_image_{lat}_{lon}"
-    # description = f"{dataset}_image_{lat}_{lon}_{start_date}_{end_date}"
+
+    # Determine spatial resolution
     if dataset == 'sentinel' and band not in ['RGB', 'NIR', 'IR']:
         res = 20
     else:
         res = dico[dataset]['resolution']
 
+    # Create bounding box geometry
     xMin, xMax, yMin, yMax = boundingBox(lat, lon, height, res)
     geometry = ee.Geometry.Rectangle([[xMin, yMin], [xMax, yMax]])
+
+    # Filter by date, cloud cover, and region
     filtered = dico[dataset]['dataset'].filterDate(start_date, end_date).filterBounds(geometry)
     if dataset == 'sentinel':
-        cloud_pct = 10
+        cloud_pct = 25
         filtered = filtered.filter(ee.Filter.lte('CLOUDY_PIXEL_PERCENTAGE', cloud_pct))
+    if dataset == 'landsat':
+        cloud_pct = 25
+        filtered = filtered.filter(ee.Filter.lte('CLOUD_COVER', cloud_pct))
+
+    # Take the median composite
     image = filtered.median().clip(geometry)
-    RGB = dico[dataset][band]
-    _min = dico[dataset]['min']
-    _max = dico[dataset]['max']
     band_names = image.bandNames()
     bands_list = band_names.getInfo()
-    if all(band in bands_list for band in RGB):
-        image_vis = image.visualize(bands=RGB, min=_min, max=_max)
+
+    # Special handling for GWL_FCS30
+    if dataset == 'gwl_fcs30':
+        # Just use the raw image; no `visualize()` or RGB check needed
+        image_vis = image
         try:
             url = image_vis.getDownloadUrl({
                 'description': description,
@@ -97,7 +119,6 @@ def generateURL(coord, height, width, dataset, crs, output_dir, start_date, end_
                 'fileNamePrefix': description,
                 'crs': crs,
                 'fileFormat': 'GEO_TIFF',
-                'region': geometry,
                 'format': 'GEO_TIFF',
                 'dimensions': [height, width]
             })
@@ -109,40 +130,72 @@ def generateURL(coord, height, width, dataset, crs, output_dir, start_date, end_
             logging.info(f'Done: {description}')
         except Exception as e:
             logging.exception(e)
-        panchromatic_band = dico[dataset]['panchromatic']
-        if sharpened and panchromatic_band in bands_list:
+        return  # Exit early for gwl_fcs30; nothing else to do
+
+    # Otherwise, handle the other datasets
+    else:
+        RGB = dico[dataset][band]  # e.g., ['B4','B3','B2'] for sentinel
+        _min = dico[dataset]['min']
+        _max = dico[dataset]['max']
+
+        # Make a quick check if all required bands exist
+        if all(b in bands_list for b in RGB):
+            image_vis = image.visualize(bands=RGB, min=_min, max=_max)
             try:
-                hsv = image.select(RGB).rgbToHsv()
-                sharpened = ee.Image.cat(
-                    [hsv.select('hue'),
-                     hsv.select('saturation'),
-                     image.select(panchromatic_band)]).hsvToRgb()
-            except Exception as e:
-                logging.exception(e)
-                pass
-            try:
-                sharpe_url = sharpened.getDownloadUrl({
-                    'description': "sharpened"+description,
+                url = image_vis.getDownloadUrl({
+                    'description': description,
                     'region': geometry,
-                    'fileNamePrefix': "sharpened"+description,
+                    'fileNamePrefix': description,
                     'crs': crs,
                     'fileFormat': 'GEO_TIFF',
-                    'region': geometry,
                     'format': 'GEO_TIFF',
                     'dimensions': [height, width]
                 })
-                sharpe_response = requests.get(sharpe_url)
-                if sharpe_response.status_code != 200:
-                    raise sharpe_response.raise_for_status()
-                with open(os.path.join(output_dir, f'sharpened_{description}.tif'), 'wb') as fd:
-                    fd.write(sharpe_response.content)
-                logging.info(f'Done: sharpened_{description}')
+                response = requests.get(url)
+                if response.status_code != 200:
+                    raise response.raise_for_status()
+                with open(os.path.join(output_dir, f'{description}.tif'), 'wb') as fd:
+                    fd.write(response.content)
+                logging.info(f'Done: {description}')
             except Exception as e:
                 logging.exception(e)
-                pass
-    else:
-        logging.info(f'Image at {(lat, lon)} has bands: {bands_list}')
-        pass
+
+            # Handle pan-sharpening if requested and if panchromatic band is available
+            panchromatic_band = dico[dataset]['panchromatic']
+            if sharpened and panchromatic_band in bands_list:
+                try:
+                    hsv = image.select(RGB).rgbToHsv()
+                    sharpened_image = ee.Image.cat(
+                        [
+                            hsv.select('hue'),
+                            hsv.select('saturation'),
+                            image.select(panchromatic_band),
+                        ]
+                    ).hsvToRgb()
+                except Exception as e:
+                    logging.exception(e)
+                    sharpened_image = None
+                if sharpened_image:
+                    try:
+                        sharpe_url = sharpened_image.getDownloadUrl({
+                            'description': "sharpened" + description,
+                            'region': geometry,
+                            'fileNamePrefix': "sharpened" + description,
+                            'crs': crs,
+                            'fileFormat': 'GEO_TIFF',
+                            'format': 'GEO_TIFF',
+                            'dimensions': [height, width]
+                        })
+                        sharpe_response = requests.get(sharpe_url)
+                        if sharpe_response.status_code != 200:
+                            raise sharpe_response.raise_for_status()
+                        with open(os.path.join(output_dir, f'sharpened_{description}.tif'), 'wb') as fd:
+                            fd.write(sharpe_response.content)
+                        logging.info(f'Done: sharpened_{description}')
+                    except Exception as e:
+                        logging.exception(e)
+        else:
+            logging.info(f'Image at {(lat, lon)} missing required bands. Found bands: {bands_list}')
 
 if __name__ == "__main__":
     parser = ArgumentParser()
@@ -158,7 +211,7 @@ if __name__ == "__main__":
     parser.add_argument('--parallel', action='store_true')
     parser.add_argument('--no-parallel', dest='parallel', action='store_false')
     parser.set_defaults(parallel=True)
-    parser.add_argument("-pn", "--parallel_number", help="number of parallel processes", default=10, type=int)
+    parser.add_argument("-pn", "--parallel_number", help="number of parallel processes", default=80, type=int)
     parser.add_argument('--redownload', action='store_true')
     parser.add_argument('--no-redownload', dest='redownload', action='store_false')
     parser.set_defaults(redownload=False)
