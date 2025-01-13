@@ -28,7 +28,8 @@ options:
                         path to output directory
   -sh SHARPENED, --sharpened SHARPENED
                         download pan-sharpened image (only available for Landsat)
-                        
+  -b BAND, --band BAND
+                        which group of bands (RGB, NIR, etc.)
 ```
 
 Since all arguments are set by default, the most basic way of running the code would be: 
@@ -37,7 +38,7 @@ Since all arguments are set by default, the most basic way of running the code w
 python imageExporter.py -f FILEPATH
 ```
 
-with FILEPATH replaced by the path to the desired coordinates csv file.
+with FILEPATH replaced by the path to the desired coordinates csv file. We also provide `cmd/run_image_exporter.sh` and `/coordinates/coordinates.csv` that can be used to download images. 
 
 ### Pre-requisites
 
