@@ -1,6 +1,6 @@
 # Satellite Image Downloader
 
-This repository contains a tool to download satellite images, located in `imageExporter.py`. The tool requires a `.csv` file with coordinates, the dataset to download images from (Sentinel, NAIP, Landsat), the desired dimensions of the output images, the output directory path, and an option to pansharpen images (only available for Landsat).
+This repository contains a tool to download satellite images, located in `imageExporter.py`. The tool requires a `.csv` file with coordinates, the dataset to download images from (Sentinel, NAIP, Landsat, and more), the desired dimensions of the output images and bands, the output directory path, and an option to pansharpen images (only available for Landsat).
 
 ## Usage Instructions
 
